@@ -81,6 +81,28 @@ def getCs(name, ratio):
                   Clist.append(filter3)
     return Clist    
     
+# def downSam(name, X, Clist, ChDim, ratio):
+#     k=-1
+#     with tf.variable_scope(name):
+#         k      = k+1
+#         X      = tf.nn.depthwise_conv2d(X, tf.tile(Clist[int(k)],[1,1,ChDim,1]), strides=[1,1,1,1],padding='SAME')
+#         downX4 = X[:,1:-1:4,1:-1:4,:]
+#         if ratio ==4:
+#             downX16 = []
+#             downX32 = downX4
+#         else: 
+#             k       = k+1
+#             X       = tf.nn.depthwise_conv2d(downX4, tf.tile(Clist[int(k)],[1,1,ChDim,1]), strides=[1,1,1,1],padding='SAME')                
+#             downX16 = X[:,1:-1:4,1:-1:4,:]   
+#             if ratio==16:
+#                 downX32 = downX16
+#             else:
+#                 k  = k+1
+#                 X       = tf.nn.depthwise_conv2d(downX16, tf.tile(Clist[int(k)],[1,1,ChDim,1]), strides=[1,1,1,1],padding='SAME')         
+#                 downX32 = X[:,0:-1:2,0:-1:2,:]      
+
+#         return downX4,  downX16,  downX32
+
 def downSam(name, X, Clist, ChDim, ratio):
     k=-1
     with tf.variable_scope(name):
@@ -90,13 +112,17 @@ def downSam(name, X, Clist, ChDim, ratio):
         if ratio ==4:
             downX16 = []
             downX32 = downX4
-        else: 
+        elif ratio==8: 
             k       = k+1
             X       = tf.nn.depthwise_conv2d(downX4, tf.tile(Clist[int(k)],[1,1,ChDim,1]), strides=[1,1,1,1],padding='SAME')                
-            downX16 = X[:,1:-1:4,1:-1:4,:]   
-            if ratio==16:
-                downX32 = downX16
-            else:
+            downX16 = X[:,0:-1:2,0:-1:2,:]   
+            downX32 = downX16
+        else:
+            k       = k+1
+            X       = tf.nn.depthwise_conv2d(downX4, tf.tile(Clist[int(k)],[1,1,ChDim,1]), strides=[1,1,1,1],padding='SAME')                
+            downX16 = X[:,1:-1:4,1:-1:4,:]  
+            downX32 = downX16                
+            if ratio==32:
                 k  = k+1
                 X       = tf.nn.depthwise_conv2d(downX16, tf.tile(Clist[int(k)],[1,1,ChDim,1]), strides=[1,1,1,1],padding='SAME')         
                 downX32 = X[:,0:-1:2,0:-1:2,:]      
@@ -104,6 +130,26 @@ def downSam(name, X, Clist, ChDim, ratio):
         return downX4,  downX16,  downX32
           
   
+# def UpSam(name,X, downY4, downY16, Y, iniUp3x3, outDim, ratio):
+#     with tf.variable_scope(name):               
+#         if ratio==32:
+#             X = UpsumLevel2('Cfilter1',X,iniUp3x3, outDim)# 2 timse upsampling
+#             X = resLevel_addF('Ajust1', 3, X, downY16/10, outDim,3)# adjusting after upsampling     
+
+#         if ratio>=16:
+#             X = UpsumLevel2('Cfilter2',X,iniUp3x3, outDim)# 
+#             X = UpsumLevel2('Cfilter3',X,iniUp3x3, outDim)#    
+#             X = resLevel_addF('Ajust2', 3, X, downY4/10, outDim,3)#
+                       
+#         X = UpsumLevel2('Cfilter4',X,iniUp3x3, outDim)# 
+#         X = UpsumLevel2('Cfilter5',X,iniUp3x3, outDim)# 
+#         X = resLevel_addF('Ajust3', 3, X, Y/10, outDim,3)# 
+#         filter1 = tf.get_variable(
+#           'Blur', [4, 4, outDim, 1], tf.float32, initializer=tf.constant_initializer(1/16))
+#         X = tf.nn.depthwise_conv2d(X,filter1,strides=[1,1,1,1],padding='SAME')        
+
+#         return X
+
 def UpSam(name,X, downY4, downY16, Y, iniUp3x3, outDim, ratio):
     with tf.variable_scope(name):               
         if ratio==32:
@@ -114,6 +160,10 @@ def UpSam(name,X, downY4, downY16, Y, iniUp3x3, outDim, ratio):
             X = UpsumLevel2('Cfilter2',X,iniUp3x3, outDim)# 
             X = UpsumLevel2('Cfilter3',X,iniUp3x3, outDim)#    
             X = resLevel_addF('Ajust2', 3, X, downY4/10, outDim,3)#
+
+        if ratio==8:
+            X = UpsumLevel2('Cfilter1',X,iniUp3x3, outDim)#    
+            X = resLevel_addF('Ajust1', 3, X, downY4/10, outDim,3)#            
                        
         X = UpsumLevel2('Cfilter4',X,iniUp3x3, outDim)# 
         X = UpsumLevel2('Cfilter5',X,iniUp3x3, outDim)# 
@@ -122,8 +172,7 @@ def UpSam(name,X, downY4, downY16, Y, iniUp3x3, outDim, ratio):
           'Blur', [4, 4, outDim, 1], tf.float32, initializer=tf.constant_initializer(1/16))
         X = tf.nn.depthwise_conv2d(X,filter1,strides=[1,1,1,1],padding='SAME')        
 
-        return X  
-        
+        return X          
 
 def resLevel(name, Fsize,X, Channel):
     with tf.variable_scope(name):

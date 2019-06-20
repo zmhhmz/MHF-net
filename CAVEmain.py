@@ -20,7 +20,7 @@ import MHFnet as MHFnet
 FLAGS = tf.app.flags.FLAGS
 
 # Mode：train, test, testAll for test all sample
-tf.app.flags.DEFINE_string('mode', 'test', 
+tf.app.flags.DEFINE_string('mode', 'train', 
                            'train or test or testAll.')
 
 # output channel number
@@ -47,6 +47,9 @@ tf.app.flags.DEFINE_float('learning_rate', 0.0001,
 # epoch number
 tf.app.flags.DEFINE_integer('epoch', 31,
                            'epoch') 
+# downsample ratio
+tf.app.flags.DEFINE_integer('ratio', 8,
+                           'ratio') 
 # path of testing sample
 tf.app.flags.DEFINE_string('test_data_name', 'TestSample',
                            'Filepattern for eval data') 
@@ -125,9 +128,9 @@ def train():
                 
     X       = tf.placeholder(tf.float32, shape=(None, FLAGS.image_size, FLAGS.image_size, FLAGS.outDim))  # HrHS (None,96,96,31)
     Y       = tf.placeholder(tf.float32, shape=(None, FLAGS.image_size, FLAGS.image_size, 3))  # HrMS (None,96,96,3)
-    Z       = tf.placeholder(tf.float32, shape=(None, FLAGS.image_size/32, FLAGS.image_size/32, FLAGS.outDim)) # LrHS (None,3,3,31)
+    Z       = tf.placeholder(tf.float32, shape=(None, FLAGS.image_size/FLAGS.ratio, FLAGS.image_size/FLAGS.ratio, FLAGS.outDim)) # LrHS (None,3,3,31)
 
-    outX, ListX, YA, E, HY  = MHFnet.HSInet(Y, Z, iniUp3x3,iniA,FLAGS.upRank,FLAGS.outDim,FLAGS.HSInetL,FLAGS.subnetL)
+    outX, ListX, YA, E, HY  = MHFnet.HSInet(Y, Z, iniUp3x3,iniA,FLAGS.upRank,FLAGS.outDim,FLAGS.HSInetL,FLAGS.subnetL,FLAGS.ratio)
     
     # loss function
     loss    = tf.reduce_mean(tf.square(X - outX)) + FLAGS.alpha*tf.reduce_mean(tf.square(X - YA))+ FLAGS.beta*tf.reduce_mean(tf.square(E))  # supervised MSE loss
@@ -149,8 +152,8 @@ def train():
     
     with tf.Session(config=config) as sess:
         sess.run(tf.global_variables_initializer())
-        if tf.train.get_checkpoint_state('temp/TrainedNet/'):   # load previous trained model
-            ckpt = tf.train.latest_checkpoint('temp/TrainedNet/')
+        if tf.train.get_checkpoint_state(save_path):   # load previous trained model
+            ckpt = tf.train.latest_checkpoint(save_path)
             saver.restore(sess, ckpt)
             ckpt_num = re.findall(r"\d",ckpt)
             if len(ckpt_num)==3:
@@ -167,7 +170,7 @@ def train():
         
         allX, allY = Crd.all_train_data_in()
         
-        val_h5_X, val_h5_Y, val_h5_Z= Crd.eval_data_in(20)
+        # val_h5_X, val_h5_Y, val_h5_Z= Crd.eval_data_in(20)
                 
         for j in range(start_point,epoch):   
 
@@ -176,14 +179,14 @@ def train():
 
             Training_Loss = 0                        
             for num in range(FLAGS.BatchIter):    
-                batch_X, batch_Y,batch_Z = Crd.train_data_in(allX, allY, FLAGS.image_size, FLAGS.batch_size)
+                batch_X, batch_Y,batch_Z = Crd.train_data_in(allX, allY, FLAGS.image_size, FLAGS.batch_size,FLAGS.ratio)
 
                 _,lossvalue = sess.run([g_optim,loss], feed_dict={X:batch_X,Y:batch_Y,Z:batch_Z,lr:lr_}) 
                 
                 Training_Loss += lossvalue  # training loss
                 
                 # visual output
-                _,ifshow = divmod(num+1,200)  
+                _,ifshow = divmod(num+1,20)  
                 if ifshow ==1:
                     pred_X,pred_ListX,pred_HY,Pred_YA = sess.run([outX, ListX, HY, YA], feed_dict={Y:batch_Y,Z:batch_Z})
                     psnr = skimage.measure.compare_psnr(batch_X,pred_X)
@@ -194,17 +197,17 @@ def train():
                     print ('.. %d epoch training, learning rate = %.8f, Training_Loss = %.4f, PSNR = %.4f, SSIM = %.4f..'
                            %(j+1, lr_, CurLoss,  psnr, ssim))
                     
-                    showX = ML.get3band_of_tensor(batch_X,nbanch=0, nframe=[0,15,30])
-                    maxS = np.max(showX)
-                    minS = np.min(showX)
-                    toshow  = np.hstack((ML.setRange(ML.get3band_of_tensor(Pred_YA,nbanch=0, nframe=[0,15,30]), maxS, minS),
-                                         ML.setRange(ML.get3band_of_tensor(pred_ListX[FLAGS.HSInetL-2],nbanch=0, nframe=[0,15,30]), maxS, minS),
-                                         ML.setRange(ML.get3band_of_tensor(pred_X,nbanch=0, nframe=[0,15,30]), maxS, minS)))
-                    toshow2 = np.hstack((ML.setRange(ML.normalized(ML.get3band_of_tensor(batch_Y,nbanch=0, nframe=[2,1,0]))),
-                                         ML.setRange(ML.normalized(ML.get3band_of_tensor(pred_HY))),
-                                         ML.setRange(showX, maxS, minS)))
-                    toshow  = np.vstack((toshow,toshow2))
-                    ML.imshow(toshow)
+                    # showX = ML.get3band_of_tensor(batch_X,nbanch=0, nframe=[0,15,30])
+                    # maxS = np.max(showX)
+                    # minS = np.min(showX)
+                    # toshow  = np.hstack((ML.setRange(ML.get3band_of_tensor(Pred_YA,nbanch=0, nframe=[0,15,30]), maxS, minS),
+                    #                      ML.setRange(ML.get3band_of_tensor(pred_ListX[FLAGS.HSInetL-2],nbanch=0, nframe=[0,15,30]), maxS, minS),
+                    #                      ML.setRange(ML.get3band_of_tensor(pred_X,nbanch=0, nframe=[0,15,30]), maxS, minS)))
+                    # toshow2 = np.hstack((ML.setRange(ML.normalized(ML.get3band_of_tensor(batch_Y,nbanch=0, nframe=[2,1,0]))),
+                    #                      ML.setRange(ML.normalized(ML.get3band_of_tensor(pred_HY))),
+                    #                      ML.setRange(showX, maxS, minS)))
+                    # toshow  = np.vstack((toshow,toshow2))
+                    # ML.imshow(toshow)
 #                    ML.imwrite(toshow,('tempIm_train/epoch%d_num%d.png'%(j+1,num+1)))
     
             CurLoss = Training_Loss/(num+1)
@@ -216,17 +219,17 @@ def train():
             ckpt = tf.train.latest_checkpoint(save_path)
             saver.restore(sess, ckpt)
 
-            Validation_Loss,pred_val  = sess.run([loss,outX],  
-                                                            feed_dict={X:val_h5_X,Y:val_h5_Y,Z:val_h5_Z,lr:lr_})
-            psnr_val = skimage.measure.compare_psnr(val_h5_X,pred_val)
-            ssim_val = skimage.measure.compare_ssim(val_h5_X,pred_val, multichannel=True)
-            toshow = np.hstack(( ML.normalized(ML.get3band_of_tensor(pred_val, nbanch=18, nframe=[0,15,30])),
-                                 ML.normalized(ML.get3band_of_tensor(val_h5_X, nbanch=18, nframe=[0,15,30]))))
+            # Validation_Loss,pred_val  = sess.run([loss,outX],  
+            #                                                 feed_dict={X:val_h5_X,Y:val_h5_Y,Z:val_h5_Z,lr:lr_})
+            # psnr_val = skimage.measure.compare_psnr(val_h5_X,pred_val)
+            # ssim_val = skimage.measure.compare_ssim(val_h5_X,pred_val, multichannel=True)
+            # toshow = np.hstack(( ML.normalized(ML.get3band_of_tensor(pred_val, nbanch=18, nframe=[0,15,30])),
+            #                      ML.normalized(ML.get3band_of_tensor(val_h5_X, nbanch=18, nframe=[0,15,30]))))
 
             
-            print ('The %d epoch is finished, learning rate = %.8f, Training_Loss = %.4f, Validation_Loss = %.4f, PSNR = %.4f, SSIM = %.4f, PSNR_Valid = %.4f,SSIM_Valid = %.4f.' %
-                  (j+1, lr_, CurLoss, Validation_Loss, psnr, ssim, psnr_val,ssim_val))
-            ML.imshow(toshow)
+            # print ('The %d epoch is finished, learning rate = %.8f, Training_Loss = %.4f, Validation_Loss = %.4f, PSNR = %.4f, SSIM = %.4f, PSNR_Valid = %.4f,SSIM_Valid = %.4f.' %
+            #       (j+1, lr_, CurLoss, Validation_Loss, psnr, ssim, psnr_val,ssim_val))
+            # ML.imshow(toshow)
             print('=========================================')     
             print('*****************************************')
                               
@@ -238,7 +241,7 @@ def testAll():
     iniUp3x3     = 0
     Y       = tf.placeholder(tf.float32, shape=(1, 512, 512, 3))  # supervised data (None,64,64,3)
     Z       = tf.placeholder(tf.float32, shape=(1, 512/32, 512/32, FLAGS.outDim))
-    outX, X1, YA, _, HY = MHFnet.HSInet(Y, Z, iniUp3x3,iniA,FLAGS.upRank,FLAGS.outDim,FLAGS.HSInetL,FLAGS.subnetL)
+    outX, X1, YA, _, HY = MHFnet.HSInet(Y, Z, iniUp3x3,iniA,FLAGS.upRank,FLAGS.outDim,FLAGS.HSInetL,FLAGS.subnetL,FLAGS.ratio)
 
     config = tf.ConfigProto(allow_soft_placement=True,log_device_placement=True)
     config.gpu_options.allow_growth = True
@@ -249,7 +252,7 @@ def testAll():
         ckpt = tf.train.latest_checkpoint(save_path)
         saver.restore(sess, ckpt) 
         for root, dirs, files in os.walk('CAVEdata/X/'):
-            for i in range(32):       
+            for i in range(32):
                 data = sio.loadmat("CAVEdata/Y/"+files[i])
                 inY  = data['RGB']
                 inY  = np.expand_dims(inY, axis = 0)

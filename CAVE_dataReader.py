@@ -11,6 +11,14 @@ import scipy.io as sio
 import MyLib as ML
 import random 
 import cv2
+
+# def wgn(x, snr):
+#     snr = 10**(snr/10.0)
+#     xpower = np.sum(x**2)/(x.shape[0]*x.shape[1]*x.shape[2])
+#     npower = xpower / snr
+#     return np.random.randn(x.shape) * np.sqrt(npower)
+
+
 def all_train_data_in():
     allDataX = []
     allDataY = []
@@ -49,11 +57,11 @@ def all_test_data_in():
                 allDataY.append(inY)
     return allDataX, allDataY
 
-def train_data_in(allX, allY, sizeI, batch_size, channel=31,dataNum = 20):
+def train_data_in(allX, allY, sizeI, batch_size,ratio, channel=31,dataNum = 20):
 #    meanfilt = np.ones((32,32))/32/32
     batch_X = np.zeros((batch_size, sizeI, sizeI, channel),'f')
     batch_Y = np.zeros((batch_size, sizeI, sizeI, 3),'f')
-    batch_Z = np.zeros((batch_size, 3, 3, channel),'f')
+    batch_Z = np.zeros((batch_size, int(sizeI/ratio), int(sizeI/ratio), channel),'f')
 #    batch_Z = np.zeros((batch_size, sizeI, sizeI, channel))
     for i in range(batch_size):
         ind = random.randint(0, dataNum-1)
@@ -84,11 +92,14 @@ def train_data_in(allX, allY, sizeI, batch_size, channel=31,dataNum = 20):
             subY = subY[::-1,:,:]
 
         batch_X[i,:,:,:] = subX
-        batch_Y[i,:,:,:] = subY
+        batch_Y[i,:,:,:] = subY#+wgn(subY,snr)
 
-    for j in range(32):
-        for k in range(32):
-            batch_Z = batch_Z + batch_X[:,j:512:32,k:512:32,:]/32/32
+    for j in range(ratio):
+        for k in range(ratio):
+            batch_Z = batch_Z + batch_X[:,j:512:ratio,k:512:ratio,:]/ratio/ratio
+
+    # for i in range(batch_size):
+    #     batch_Z+=wgn(batch_Z,snr)
 
     return batch_X, batch_Y, batch_Z
 
